@@ -36,10 +36,11 @@ def determine_serving_patrol(now):
 
 
 # Formulate and send the meeting announcement
-async def send_meeting_announcement(targetTime):
+async def send_meeting_announcement():
     await client.wait_until_ready()
 
-    channel = client.get_channel(988604861065080892)
+    # channel = client.get_channel(POINT_CHANNEL)
+    channel = client.get_channel(POINT_CHANNEL)
     now = datetime.now()
 
     meetingPlace = determine_meeting_place(now)
@@ -54,59 +55,101 @@ async def send_meeting_announcement(targetTime):
         timeOfDay = "afternoon"
         sbgOrSg = "Song and Grace"
         happyDay = ""
+
+    # Determine actual meeting time
+    if now.weekday() == 5 or (now.weekday() == 6 and now.hour < 12):
+        actualMeetingTime = "7:00 AM" if now.weekday() == 5 else "11:00 AM"
+    else:
+        actualMeetingTime = "7:30 AM" if now.hour < 12 else "5:30 PM"
+
     await channel.send(f"{happyDay}This {timeOfDay}'s meeting will be at **{meetingPlace}**. "
-                       f"be there by {str(int(targetTime.strftime('%I')) + 1)}:{targetTime.strftime('%M')}!\n"
-                       f"{sbgOrSg}: **{songPatrol}**\nServing Patrol: **{servingPatrol}**")
+                       f"Be there by **{actualMeetingTime}**!\n"
+                       f"{sbgOrSg}: **{songPatrol}**\nServing Patrol: **{servingPatrol}**\n@everyone")
 
 
 def tomorrow(now): return datetime.combine(now.date() + timedelta(days=1), time(0))
 
 
 async def bg_announcement_loop():
-    now = datetime.now()
     while True:
+        now = datetime.now()
         if now.weekday() == 5:  # Saturday Edge Case
-            targetTime = time(7, 0, 0)
+            targetTime = time(6, 15, 0)
             if now.time() > targetTime:  # It's saturday but announcement already missed
                 await asyncio.sleep((tomorrow(now) - now).total_seconds())
             else:
                 await asyncio.sleep((datetime.combine(now.date(), targetTime) - now).total_seconds())
-                await send_meeting_announcement(targetTime)
+                await send_meeting_announcement()
                 await asyncio.sleep((tomorrow(now) - now).total_seconds())
-        elif now.weekday() == 6:  # Sunday Edge Case
-            targetTime =time(11, 0, 0)
+        elif now.weekday() == 6 and now.hour < 12:  # Sunday Edge Case
+            targetTime = time(10, 15, 0)
             if now.time() > targetTime:
                 await asyncio.sleep((tomorrow(now) - now).total_seconds())
             else:
                 await asyncio.sleep((datetime.combine(now.date(), targetTime) - now).total_seconds())
-                await send_meeting_announcement(targetTime)
-                await asyncio.sleep((tomorrow(now) - now).total_seconds())
+                await send_meeting_announcement()
+                await asyncio.sleep(timedelta(hours=3, minutes=45).total_seconds())
         else:  # Should be normal weekdays!
-            targetTime = [time(6, 30, 0), time(16, 30, 0)]
+            targetTime = [time(6, 45, 0), time(16, 45, 0)]
             if now.time() > targetTime[1]:  # Missed both announcement times, sleep to next day.
                 await asyncio.sleep((tomorrow(now) - now).total_seconds())
             elif now.time() > targetTime[0]:
                 await asyncio.sleep((datetime.combine(now.date(), targetTime[1]) - now).total_seconds())
-                await send_meeting_announcement(targetTime[1])
+                await send_meeting_announcement()  # Actual meeting time is at 5:30pm
                 await asyncio.sleep((tomorrow(now) - now).total_seconds())
             else:
                 await asyncio.sleep((datetime.combine(now.date(), targetTime[0]) - now).total_seconds())
-                await send_meeting_announcement(targetTime[0])
-                await asyncio.sleep((datetime.combine(now.date(), targetTime[2]) - now).total_seconds())
+                await send_meeting_announcement()  # Actual meeting time is at 7:30am
+                await asyncio.sleep((datetime.combine(now.date(), targetTime[1]) - now).total_seconds() - 30)
 
 
 @client.command()
-async def test(ctx, month, day, hour):
-    x = datetime(2022, int(month), int(day), int(hour), 0, 0, 000000)
-    await send_meeting_announcement(x)
-    # await ctx.send(f"{x.strftime('%Y')}, {x.strftime('%B')}, {x.strftime('%A')} {str(x.day)}, {x.strftime('%I')}:{x.strftime('%M')}{x.strftime('%p')}")
+async def manual(ctx):
+    await send_meeting_announcement()
 
 
 @client.command()
 async def changeServers(ctx, *, newPatrol):
-    with open('Extra_Serving_Duties.txt', 'w') as file:
-        file.write(newPatrol)
-    await ctx.send(f"Okay, changed the patrol with extra serving duties to **{newPatrol}**")
+    if newPatrol not in ["The Ladybugs", "Sssquandypost", "Pep Nips", "Funky Monkeys"]:
+        await ctx.send("THAT IS NOT A PATROL!!!!")
+    else:
+        with open('Extra_Serving_Duties.txt', 'w') as file:
+            file.write(newPatrol)
+        await ctx.send(f"Okay, changed the patrol with extra serving duties to **{newPatrol}**")
+
+
+@client.command()
+async def test(ctx):
+    await ctx.send("Up and working!")
+
+
+@client.command()
+async def pogoTeam(ctx, arg):
+    await client.wait_until_ready()
+    mysticRole = ctx.guild.get_role(990955798211473428)
+    valorRole = ctx.guild.get_role(990956081935155200)
+    instinctRole = ctx.guild.get_role(990956366766166056)
+
+    userRoles = ctx.author.roles
+
+    if mysticRole in userRoles:
+        await ctx.author.remove_roles(mysticRole)
+    if valorRole in userRoles:
+        await ctx.author.remove_roles(valorRole)
+    if instinctRole in userRoles:
+        await ctx.author.remove_roles(instinctRole)
+
+    if arg.lower() == "mystic" or arg.lower() == "blue":
+        await ctx.author.add_roles(mysticRole)
+        await ctx.send("You now have the team **Mystic** role")
+    elif arg.lower() == "valor" or arg.lower() == "red":
+        await ctx.author.add_roles(valorRole)
+        await ctx.send("You now have the team **Valor** role")
+    elif arg.lower() == "instinct" or arg.lower() == "yellow":
+        await ctx.author.add_roles(instinctRole)
+        await ctx.send("You now have the team **Instinct** role")
+    else:
+        await ctx.send("Not a valid pokemon go team!")
 
 
 @client.event
